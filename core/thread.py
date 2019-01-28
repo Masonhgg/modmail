@@ -443,7 +443,7 @@ class ThreadManager(ThreadManagerABC):
     async def populate_cache(self):
         for channel in self.bot.modmail_guild.text_channels:
             if channel.category != self.bot.main_category and not \
-                    self.bot.using_multiple_server_setup:
+                    self.bot.multiple_servers:
                 continue
             await self.find(channel=channel)
 

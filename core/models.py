@@ -36,12 +36,12 @@ class Bot(abc.ABC, commands.Bot):
 
     @property
     @abc.abstractmethod
-    def db(self) -> typing.Optional[AsyncIOMotorClient]:
+    def api(self) -> 'UserClient':
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def self_hosted(self) -> bool:
+    def db(self) -> typing.Optional[AsyncIOMotorClient]:
         raise NotImplementedError
 
     @property
@@ -56,57 +56,12 @@ class Bot(abc.ABC, commands.Bot):
 
     @property
     @abc.abstractmethod
-    def api(self) -> 'UserClient':
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
     def threads(self) -> 'ThreadManagerABC':
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def log_channel(self) -> typing.Optional[TextChannel]:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def snippets(self) -> typing.Dict[str, str]:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
     def aliases(self) -> typing.Dict[str, str]:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def token(self) -> str:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def guild_id(self) -> int:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def guild(self) -> typing.Optional[Guild]:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def modmail_guild(self) -> typing.Optional[Guild]:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def using_multiple_server_setup(self) -> bool:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def main_category(self) -> typing.Optional[TextChannel]:
         raise NotImplementedError
 
     @property
@@ -121,6 +76,21 @@ class Bot(abc.ABC, commands.Bot):
 
     @property
     @abc.abstractmethod
+    def self_hosted(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def snippets(self) -> typing.Dict[str, str]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def token(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
     def mod_color(self) -> typing.Union[Color, int]:
         raise NotImplementedError
 
@@ -129,13 +99,43 @@ class Bot(abc.ABC, commands.Bot):
     def recipient_color(self) -> typing.Union[Color, int]:
         raise NotImplementedError
 
+    @property
+    @abc.abstractmethod
+    def guild(self) -> typing.Optional[Guild]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def guild_id(self) -> int:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def modmail_guild(self) -> typing.Optional[Guild]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def multiple_servers(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def main_category(self) -> typing.Optional[TextChannel]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def log_channel(self) -> typing.Optional[TextChannel]:
+        raise NotImplementedError
+
     @abc.abstractmethod
     async def process_modmail(self, message: Message) -> None:
         raise NotImplementedError
 
     @staticmethod
     @abc.abstractmethod
-    def overwrites(ctx: commands.Context) -> dict:
+    def guild_perm_overwrite(ctx: commands.Context) -> dict:
         raise NotImplementedError
 
 

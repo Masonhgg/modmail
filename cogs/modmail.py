@@ -31,7 +31,7 @@ class Modmail:
 
         category = await self.bot.modmail_guild.create_category(
             name='Modmail',
-            overwrites=self.bot.overwrites(ctx)
+            overwrites=self.bot.guild_perm_overwrite(ctx)
         )
 
         await category.edit(position=0)

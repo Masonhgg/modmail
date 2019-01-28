@@ -78,16 +78,12 @@ class ModmailBot(Bot):
         return __version__
 
     @property
-    def db(self):
-        return self._db
-
-    @property
-    def self_hosted(self):
-        return bool(self.config.get('mongo_uri', ''))
-
-    @property
     def api(self):
         return self._api
+
+    @property
+    def db(self):
+        return self._db
 
     @property
     def config(self):
@@ -107,99 +103,9 @@ class ModmailBot(Bot):
             self._threads = ThreadManager(self)
         return self._threads
 
-    async def get_prefix(self, message=None):
-        return [self.prefix, f'<@{self.user.id}> ', f'<@!{self.user.id}> ']
-
-    def _load_extensions(self):
-        """Adds commands automatically"""
-        self.remove_command('help')
-
-        print(LINE + Fore.CYAN)
-        print('┌┬┐┌─┐┌┬┐┌┬┐┌─┐┬┬',
-              '││││ │ │││││├─┤││',
-              '┴ ┴└─┘─┴┘┴ ┴┴ ┴┴┴─┘', sep='\n')
-        print(f'v{__version__}')
-        print('Authors: kyb3r, fourjr, Taaku18' + Style.RESET_ALL)
-        print(LINE + Fore.CYAN)
-
-        for file in listdir('cogs'):
-            if not file.endswith('.py'):
-                continue
-            cog = f'cogs.{file[:-3]}'
-            print(f'Loading {cog}')
-            self.load_extension(cog)
-
-    async def logout(self):
-        await self.session.close()
-        self.data_task.cancel()
-        self.autoupdate_task.cancel()
-        await super().logout()
-
-    def run(self, *args, **kwargs):
-        try:
-            super().run(self.token, *args, **kwargs)
-        finally:
-            print(Fore.RED + ' - Shutting down bot' + Style.RESET_ALL)
-
-    @property
-    def log_channel(self):
-        channel_id = self.config.get('log_channel_id')
-        if channel_id is not None:
-            return self.get_channel(int(channel_id))
-        if self.main_category is not None:
-            return self.main_category.channels[0]
-        return None
-
-    @property
-    def snippets(self):
-        return {k: v for k, v in self.config.get('snippets', {}).items() if v}
-
     @property
     def aliases(self):
         return {k: v for k, v in self.config.get('aliases', {}).items() if v}
-
-    @property
-    def token(self):
-        return self.config.token
-
-    @property
-    def guild_id(self):
-        return int(self.config.guild_id)
-
-    @property
-    def guild(self):
-        """
-        The guild that the bot is serving
-        (the server where users message it from)
-        """
-        return discord.utils.get(self.guilds, id=self.guild_id)
-
-    @property
-    def modmail_guild(self):
-        """
-        The guild that the bot is operating in
-        (where the bot is creating threads)
-        """
-        modmail_guild_id = self.config.get('modmail_guild_id')
-        if not modmail_guild_id:
-            return self.guild
-        return discord.utils.get(self.guilds, id=int(modmail_guild_id))
-
-    @property
-    def using_multiple_server_setup(self):
-        return self.modmail_guild != self.guild
-
-    @property
-    def main_category(self):
-        category_id = self.config.get('main_category_id')
-        if category_id is not None:
-            return discord.utils.get(self.modmail_guild.categories,
-                                     id=int(category_id))
-
-        if self.modmail_guild:
-            return discord.utils.get(self.modmail_guild.categories,
-                                     name='Modmail')
-        return None
 
     @property
     def blocked_users(self):
@@ -208,6 +114,18 @@ class ModmailBot(Bot):
     @property
     def prefix(self):
         return self.config.get('prefix', '?')
+
+    @property
+    def self_hosted(self):
+        return bool(self.config.get('mongo_uri', ''))
+
+    @property
+    def snippets(self):
+        return {k: v for k, v in self.config.get('snippets', {}).items() if v}
+
+    @property
+    def token(self):
+        return self.config.token
 
     @property
     def mod_color(self):
@@ -234,6 +152,139 @@ class ModmailBot(Bot):
             return discord.Color.gold()
         else:
             return color
+
+    @property
+    def guild(self):
+        """
+        The guild that the bot is serving
+        (the server where users message it from)
+        """
+        return discord.utils.get(self.guilds, id=self.guild_id)
+
+    @property
+    def guild_id(self):
+        return int(self.config.guild_id)
+
+    @property
+    def modmail_guild(self):
+        """
+        The guild that the bot is operating in
+        (where the bot is creating threads)
+        """
+        modmail_guild_id = self.config.get('modmail_guild_id')
+        if not modmail_guild_id:
+            return self.guild
+        return discord.utils.get(self.guilds, id=int(modmail_guild_id))
+
+    @property
+    def multiple_servers(self):
+        return self.modmail_guild != self.guild
+
+    @property
+    def log_channel(self):
+        channel_id = self.config.get('log_channel_id')
+        if channel_id is not None:
+            return self.get_channel(int(channel_id))
+        if self.main_category is not None:
+            return self.main_category.channels[0]
+        return None
+
+    @property
+    def main_category(self):
+        category_id = self.config.get('main_category_id')
+        if category_id is not None:
+            return discord.utils.get(self.modmail_guild.categories,
+                                     id=int(category_id))
+
+        if self.modmail_guild:
+            return discord.utils.get(self.modmail_guild.categories,
+                                     name='Modmail')
+        return None
+
+    async def _load_activities(self):
+        activity_type = self.config.get('activity_type', -1)
+        message = self.config.get('activity_message', '')
+
+        try:
+            activity_type = ActivityType(activity_type)
+        except ValueError:
+            activity_type = -1
+
+        if activity_type >= 0 and message:
+            normalized_message = message.strip()
+            if activity_type == ActivityType.listening:
+                if message.lower().startswith('to '):
+                    # Must be listening to...
+                    normalized_message = message[3:].strip()
+        else:
+            normalized_message = ''
+
+        if normalized_message:
+            if activity_type == ActivityType.streaming:
+                url = self.config.get('twitch_url',
+                                      'https://www.twitch.tv/discord-modmail/')
+            else:
+                url = None
+
+            activity = discord.Activity(type=activity_type,
+                                        name=normalized_message,
+                                        url=url)
+            await self.change_presence(activity=activity)
+            # TODO: Trim message
+            print(f'{Fore.CYAN}Activity set to: '
+                  f'{activity_type.name} {message}.')
+        else:
+            print(f'{Fore.CYAN}No activity message set.')
+
+    async def _load_closures(self):
+        closures = self.config.closures.copy()
+        print(f'{Fore.CYAN}There are {len(closures)} thread(s) pending '
+              'to be closed.')
+
+        for recipient_id, items in closures.items():
+            after = (datetime.fromisoformat(items['time']) -
+                     datetime.utcnow()).total_seconds()
+            if after < 0:
+                after = 0
+            recipient = self.get_user(int(recipient_id))
+
+            thread = await self.threads.find(recipient=recipient)
+
+            if not thread:
+                # If the recipient is gone or channel is deleted
+                self.config.closures.pop(str(recipient_id))
+                await self.config.update()
+                continue
+
+            # TODO: Low priority,
+            #  Retrieve messages/replies when bot is down, from history?
+            await thread.close(
+                closer=self.get_user(items['closer_id']),
+                after=after,
+                silent=items['silent'],
+                delete_channel=items['delete_channel'],
+                message=items['message']
+            )
+        print(LINE)
+
+    def _load_extensions(self):
+        """Adds commands automatically"""
+        self.remove_command('help')
+
+        print(LINE + Fore.CYAN)
+        print('┌┬┐┌─┐┌┬┐┌┬┐┌─┐┬┬',
+              '││││ │ │││││├─┤││',
+              '┴ ┴└─┘─┴┘┴ ┴┴ ┴┴┴─┘', sep='\n')
+        print(f'v{__version__}')
+        print('Authors: kyb3r, fourjr, Taaku18' + Style.RESET_ALL)
+        print(LINE + Fore.CYAN)
+
+        for file in listdir('cogs'):
+            if not file.endswith('.py'):
+                continue
+            cog = f'cogs.{file[:-3]}'
+            print(f'Loading {cog}')
+            self.load_extension(cog)
 
     async def on_connect(self):
         print(LINE)
@@ -273,71 +324,158 @@ class ModmailBot(Bot):
         # Wait until config cache is populated with stuff from db
         await self.config.wait_until_ready()
 
-        # activities
-        activity_type = self.config.get('activity_type', -1)
-        message = self.config.get('activity_message', '')
+        await self._load_activities()
+        await self._load_closures()
 
+    async def on_message(self, message):
+        if message.type == discord.MessageType.pins_add and \
+                message.author == self.user:
+            await message.delete()
+
+        if message.author.bot:
+            return
+
+        if isinstance(message.channel, discord.DMChannel):
+            return await self.process_modmail(message)
+
+        prefix = self.prefix
+
+        if message.content.startswith(prefix):
+            cmd = message.content[len(prefix):].strip()
+            if cmd in self.snippets:
+                message.content = f'{prefix}reply {self.snippets[cmd]}'
+
+        ctx = await self.get_context(message)
+        if ctx.command:
+            return await self.invoke(ctx)
+
+        thread = await self.threads.find(channel=ctx.channel)
+        if thread is not None:
+            await self.api.append_log(message, type_='internal')
+
+    async def on_message_edit(self, before, after):
+        if before.author.bot:
+            return
+        if isinstance(before.channel, discord.DMChannel):
+            thread = await self.threads.find(recipient=before.author)
+            async for msg in thread.channel.history():
+                if msg.embeds:
+                    embed = msg.embeds[0]
+                    matches = str(embed.author.url).split('/')
+                    if matches and matches[-1] == str(before.id):
+                        embed.description = after.content
+                        await msg.edit(embed=embed)
+                        await self.api.edit_message(str(after.id),
+                                                    after.content)
+                        break
+
+    async def on_message_delete(self, message):
+        """Support for deleting linked messages"""
+        if message.embeds and not isinstance(message.channel,
+                                             discord.DMChannel):
+            message_id = str(message.embeds[0].author.url).split('/')[-1]
+            if message_id.isdigit():
+                thread = await self.threads.find(channel=message.channel)
+
+                channel = thread.recipient.dm_channel
+
+                async for msg in channel.history():
+                    if msg.embeds and msg.embeds[0].author:
+                        url = str(msg.embeds[0].author.url)
+                        if message_id == url.split('/')[-1]:
+                            return await msg.delete()
+
+    async def on_guild_channel_delete(self, channel):
+        if channel.guild != self.modmail_guild:
+            return
+
+        audit_logs = self.modmail_guild.audit_logs()
+        entry = await audit_logs.find(lambda e: e.target.id == channel.id)
+        mod = entry.user
+
+        if mod == self.user:
+            return
+
+        if not isinstance(channel, discord.TextChannel):
+            if self.config.get('main_category_id') == channel.id:
+                await self.config.update({
+                    'main_category_id': None
+                })
+            return
+
+        if self.config.get('log_channel_id') == channel.id:
+            await self.config.update({
+                'log_channel_id': None
+            })
+            return
+
+        thread = await self.threads.find(channel=channel)
+        if not thread:
+            return
+
+        await thread.close(closer=mod, silent=True, delete_channel=False)
+
+    async def on_command_error(self, context, exception):
+        if isinstance(exception, (commands.MissingRequiredArgument,
+                                  commands.UserInputError)):
+            await context.invoke(self.get_command('help'),
+                                 command=str(context.command))
+        else:
+            raise exception
+
+    async def get_prefix(self, message=None):
+        return [self.prefix, f'<@{self.user.id}> ', f'<@!{self.user.id}> ']
+
+    def run(self, *args, **kwargs):
         try:
-            activity_type = ActivityType(activity_type)
-        except ValueError:
-            activity_type = -1
+            super().run(self.token, *args, **kwargs)
+        finally:
+            print(Fore.RED + ' - Shutting down bot' + Style.RESET_ALL)
 
-        if activity_type >= 0 and message:
-            normalized_message = message.strip()
-            if activity_type == ActivityType.listening:
-                if message.lower().startswith('to '):
-                    # Must be listening to...
-                    normalized_message = message[3:].strip()
-        else:
-            normalized_message = ''
+    async def logout(self):
+        await self.session.close()
+        self.data_task.cancel()
+        self.autoupdate_task.cancel()
+        await super().logout()
 
-        if normalized_message:
-            if activity_type == ActivityType.streaming:
-                url = self.config.get('twitch_url',
-                                      'https://www.twitch.tv/discord-modmail/')
-            else:
-                url = None
+    async def get_context(self, message, *, cls=commands.Context):
+        """
+        Returns the invocation context from the message.
+        Supports getting the prefix from database as well as command aliases.
+        """
 
-            activity = discord.Activity(type=activity_type,
-                                        name=normalized_message,
-                                        url=url)
-            await self.change_presence(activity=activity)
-            # TODO: Trim message
-            print(f'{Fore.CYAN}Activity set to: '
-                  f'{activity_type.name} {message}.')
-        else:
-            print(f'{Fore.CYAN}No activity message set.')
+        view = StringView(message.content)
+        ctx = cls(prefix=None, view=view, bot=self, message=message)
 
-        # closures
-        closures = self.config.closures.copy()
-        print(f'{Fore.CYAN}There are {len(closures)} thread(s) pending '
-              'to be closed.')
+        if self._skip_check(message.author.id, self.user.id):
+            return ctx
 
-        for recipient_id, items in closures.items():
-            after = (datetime.fromisoformat(items['time']) -
-                     datetime.utcnow()).total_seconds()
-            if after < 0:
-                after = 0
-            recipient = self.get_user(int(recipient_id))
+        prefixes = await self.get_prefix()
 
-            thread = await self.threads.find(recipient=recipient)
+        invoked_prefix = discord.utils.find(view.skip_string, prefixes)
+        if invoked_prefix is None:
+            return ctx
 
-            if not thread:
-                # If the recipient is gone or channel is deleted
-                self.config.closures.pop(str(recipient_id))
-                await self.config.update()
-                continue
+        invoker = view.get_word().lower()
 
-            # TODO: Low priority,
-            #  Retrieve messages/replies when bot is down, from history?
-            await thread.close(
-                closer=self.get_user(items['closer_id']),
-                after=after,
-                silent=items['silent'],
-                delete_channel=items['delete_channel'],
-                message=items['message']
-            )
-        print(LINE)
+        # Check if there is any aliases being called.
+        alias = self.config.get('aliases', {}).get(invoker)
+        if alias is not None:
+            ctx._alias_invoked = True
+            len_ = len(f'{invoked_prefix}{invoker}')
+            view = StringView(f'{alias}{ctx.message.content[len_:]}')
+            ctx.view = view
+            invoker = view.get_word()
+
+        ctx.invoked_with = invoker
+        ctx.prefix = self.prefix  # Sane prefix (No mentions)
+        ctx.command = self.all_commands.get(invoker)
+
+        has_ai = hasattr(ctx, '_alias_invoked')
+        if ctx.command is self.get_command('eval') and has_ai:
+            # ctx.command.checks = None # Let anyone use the command.
+            pass
+        return ctx
 
     async def process_modmail(self, message):
         """Processes messages sent to the bot."""
@@ -386,161 +524,6 @@ class ModmailBot(Bot):
             thread = await self.threads.find_or_create(message.author)
             await thread.send(message)
 
-    async def get_context(self, message, *, cls=commands.Context):
-        """
-        Returns the invocation context from the message.
-        Supports getting the prefix from database as well as command aliases.
-        """
-
-        view = StringView(message.content)
-        ctx = cls(prefix=None, view=view, bot=self, message=message)
-
-        if self._skip_check(message.author.id, self.user.id):
-            return ctx
-
-        prefixes = await self.get_prefix()
-
-        invoked_prefix = discord.utils.find(view.skip_string, prefixes)
-        if invoked_prefix is None:
-            return ctx
-
-        invoker = view.get_word().lower()
-
-        # Check if there is any aliases being called.
-        alias = self.config.get('aliases', {}).get(invoker)
-        if alias is not None:
-            ctx._alias_invoked = True
-            len_ = len(f'{invoked_prefix}{invoker}')
-            view = StringView(f'{alias}{ctx.message.content[len_:]}')
-            ctx.view = view
-            invoker = view.get_word()
-
-        ctx.invoked_with = invoker
-        ctx.prefix = self.prefix  # Sane prefix (No mentions)
-        ctx.command = self.all_commands.get(invoker)
-
-        has_ai = hasattr(ctx, '_alias_invoked')
-        if ctx.command is self.get_command('eval') and has_ai:
-            # ctx.command.checks = None # Let anyone use the command.
-            pass
-
-        return ctx
-
-    async def on_message(self, message):
-        if message.type == discord.MessageType.pins_add and \
-                message.author == self.user:
-            await message.delete()
-
-        if message.author.bot:
-            return
-
-        if isinstance(message.channel, discord.DMChannel):
-            return await self.process_modmail(message)
-
-        prefix = self.prefix
-
-        if message.content.startswith(prefix):
-            cmd = message.content[len(prefix):].strip()
-            if cmd in self.snippets:
-                message.content = f'{prefix}reply {self.snippets[cmd]}'
-
-        ctx = await self.get_context(message)
-        if ctx.command:
-            return await self.invoke(ctx)
-
-        thread = await self.threads.find(channel=ctx.channel)
-        if thread is not None:
-            await self.api.append_log(message, type_='internal')
-
-    async def on_guild_channel_delete(self, channel):
-        if channel.guild != self.modmail_guild:
-            return
-
-        audit_logs = self.modmail_guild.audit_logs()
-        entry = await audit_logs.find(lambda e: e.target.id == channel.id)
-        mod = entry.user
-
-        if mod == self.user:
-            return
-
-        if not isinstance(channel, discord.TextChannel):
-            if self.config.get('main_category_id') == channel.id:
-                await self.config.update({
-                    'main_category_id': None
-                })
-            return
-
-        if self.config.get('log_channel_id') == channel.id:
-            await self.config.update({
-                'log_channel_id': None
-            })
-            return
-
-        thread = await self.threads.find(channel=channel)
-        if not thread:
-            return
-
-        await thread.close(closer=mod, silent=True, delete_channel=False)
-
-    async def on_message_delete(self, message):
-        """Support for deleting linked messages"""
-        if message.embeds and not isinstance(message.channel,
-                                             discord.DMChannel):
-            message_id = str(message.embeds[0].author.url).split('/')[-1]
-            if message_id.isdigit():
-                thread = await self.threads.find(channel=message.channel)
-
-                channel = thread.recipient.dm_channel
-
-                async for msg in channel.history():
-                    if msg.embeds and msg.embeds[0].author:
-                        url = str(msg.embeds[0].author.url)
-                        if message_id == url.split('/')[-1]:
-                            return await msg.delete()
-
-    async def on_message_edit(self, before, after):
-        if before.author.bot:
-            return
-        if isinstance(before.channel, discord.DMChannel):
-            thread = await self.threads.find(recipient=before.author)
-            async for msg in thread.channel.history():
-                if msg.embeds:
-                    embed = msg.embeds[0]
-                    matches = str(embed.author.url).split('/')
-                    if matches and matches[-1] == str(before.id):
-                        embed.description = after.content
-                        await msg.edit(embed=embed)
-                        await self.api.edit_message(str(after.id),
-                                                    after.content)
-                        break
-
-    async def on_command_error(self, context, exception):
-        if isinstance(exception, (commands.MissingRequiredArgument,
-                                  commands.UserInputError)):
-            await context.invoke(self.get_command('help'),
-                                 command=str(context.command))
-        else:
-            raise exception
-
-    @staticmethod
-    def overwrites(ctx):
-        """Permission overwrites for the guild."""
-        overwrites = {
-            ctx.guild.default_role: discord.PermissionOverwrite(
-                read_messages=False
-            ),
-            ctx.guild.me: discord.PermissionOverwrite(
-                read_messages=True
-            )
-        }
-
-        for role in ctx.guild.roles:
-            if role.permissions.manage_guild:
-                overwrites[role] = discord.PermissionOverwrite(
-                    read_messages=True
-                )
-        return overwrites
-
     async def validate_api_token(self):
         try:
             self.config.modmail_api_token
@@ -579,31 +562,23 @@ class ModmailBot(Bot):
             print(Style.RESET_ALL + Fore.CYAN +
                   'Successfully connected to the database.')
 
-    async def data_loop(self):
-        await self.wait_until_ready()
-        self.owner = (await self.application_info()).owner
-
-        while not self.is_closed():
-            data = {
-                "owner_name": str(self.owner),
-                "owner_id": self.owner.id,
-                "bot_id": self.user.id,
-                "bot_name": str(self.user),
-                "avatar_url": self.user.avatar_url,
-                "guild_id": self.guild_id,
-                "guild_name": self.guild.name,
-                "member_count": len(self.guild.members),
-                "uptime": (datetime.utcnow() -
-                           self.start_time).total_seconds(),
-                "latency": f'{self.ws.latency * 1000:.4f}',
-                "version": self.version,
-                # TODO: change to `self_hosted`
-                "selfhosted": self.self_hosted,
-                "last_updated": str(datetime.utcnow())
-            }
-
-            await self.api.post_metadata(data)
-            await asyncio.sleep(3600)
+    @staticmethod
+    def guild_perm_overwrite(ctx):
+        """Permission overwrites for the guild."""
+        overwrites = {
+            ctx.guild.default_role: discord.PermissionOverwrite(
+                read_messages=False
+            ),
+            ctx.guild.me: discord.PermissionOverwrite(
+                read_messages=True
+            )
+        }
+        for role in ctx.guild.roles:
+            if role.permissions.manage_guild:
+                overwrites[role] = discord.PermissionOverwrite(
+                    read_messages=True
+                )
+        return overwrites
 
     async def autoupdate_loop(self):
         await self.wait_until_ready()
@@ -652,6 +627,32 @@ class ModmailBot(Bot):
                     channel = self.log_channel
                     await channel.send(embed=embed)
 
+            await asyncio.sleep(3600)
+
+    async def data_loop(self):
+        await self.wait_until_ready()
+        self.owner = (await self.application_info()).owner
+
+        while not self.is_closed():
+            data = {
+                "owner_name": str(self.owner),
+                "owner_id": self.owner.id,
+                "bot_id": self.user.id,
+                "bot_name": str(self.user),
+                "avatar_url": self.user.avatar_url,
+                "guild_id": self.guild_id,
+                "guild_name": self.guild.name,
+                "member_count": len(self.guild.members),
+                "uptime": (datetime.utcnow() -
+                           self.start_time).total_seconds(),
+                "latency": f'{self.ws.latency * 1000:.4f}',
+                "version": self.version,
+                # TODO: change to `self_hosted`
+                "selfhosted": self.self_hosted,
+                "last_updated": str(datetime.utcnow())
+            }
+
+            await self.api.post_metadata(data)
             await asyncio.sleep(3600)
 
 
